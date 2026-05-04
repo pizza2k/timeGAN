@@ -134,8 +134,8 @@ def main (args):
   ## Print discriminative and predictive scores
   print(metric_results)
 
-  ## Save generated data to CSV (with date column if original had one)
-  if info_dict is not None and info_dict.get('has_date', False):
+  ## Save generated data to CSV
+  if info_dict is not None:
     # Reverse the data_loading normalization to restore original scale
     data_min = info_dict['data_min']
     data_max = info_dict['data_max']
@@ -143,22 +143,24 @@ def main (args):
 
     feature_cols = info_dict['feature_columns']
     original_columns = info_dict['original_columns']
-    date_col = info_dict['date_column']
-    date_format = info_dict['date_format']
-    date_freq = info_dict['date_freq']
 
     all_rows = []
     for sample in save_data:
       sample_df = pd.DataFrame(sample, columns=feature_cols)
-      sample_df[date_col] = generate_dates(len(sample), date_format, date_freq)
-      # Reorder columns to match original CSV
-      sample_df = sample_df[original_columns]
+      # Add date column if original had one
+      if info_dict.get('has_date', False):
+        date_col = info_dict['date_column']
+        date_format = info_dict['date_format']
+        date_freq = info_dict['date_freq']
+        sample_df[date_col] = generate_dates(len(sample), date_format, date_freq)
+        # Reorder columns to match original CSV
+        sample_df = sample_df[original_columns]
       all_rows.append(sample_df)
 
     final_df = pd.concat(all_rows, ignore_index=True)
 
-    os.makedirs('generated', exist_ok=True)
-    out_path = os.path.join('generated', 'generated_data.csv')
+    os.makedirs(args.output_dir, exist_ok=True)
+    out_path = os.path.join(args.output_dir, args.output_name)
     final_df.to_csv(out_path, index=False)
     print('Saved generated data to ' + out_path)
 
@@ -209,6 +211,16 @@ if __name__ == '__main__':
       help='iterations of the metric computation',
       default=10,
       type=int)
+  parser.add_argument(
+      '--output_dir',
+      help='output directory for generated CSV',
+      default='generated',
+      type=str)
+  parser.add_argument(
+      '--output_name',
+      help='output filename for generated CSV',
+      default='generated_data.csv',
+      type=str)
 
   args = parser.parse_args()
 
