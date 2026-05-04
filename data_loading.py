@@ -76,7 +76,7 @@ def detect_date_column(df):
 
   Returns:
     - date_col: name of date column or None
-    - date_format: inferred date format string or None
+    - date_example: first raw date string as example or None
     - freq: inferred date frequency or 'D'
   """
   date_keywords = ['date', 'time', 'timestamp', 'datetime']
@@ -87,9 +87,9 @@ def detect_date_column(df):
       try:
         parsed = pd.to_datetime(df[col], errors='coerce')
         if parsed.notna().sum() > len(df) * 0.5:
-          fmt = infer_date_format(df[col])
+          example = str(df[col].dropna().iloc[0])
           freq = infer_freq(df[col])
-          return col, fmt, freq
+          return col, example, freq
       except:
         continue
 
@@ -99,9 +99,9 @@ def detect_date_column(df):
       try:
         parsed = pd.to_datetime(df[col], errors='coerce')
         if parsed.notna().sum() > len(df) * 0.5:
-          fmt = infer_date_format(df[col])
+          example = str(df[col].dropna().iloc[0])
           freq = infer_freq(df[col])
-          return col, fmt, freq
+          return col, example, freq
       except:
         continue
   return None, None, 'D'
@@ -123,6 +123,21 @@ def infer_freq(date_series):
     freq = pd.infer_freq(dates)
     if freq is not None:
       return freq
+    # Manual fallback: compute median diff in seconds
+    diffs = dates.diff().dropna()
+    median_seconds = diffs.median().total_seconds()
+    if median_seconds <= 60:
+      return 'T'
+    elif median_seconds <= 3600:
+      return 'H'
+    elif median_seconds <= 7200:
+      return '2H'
+    elif median_seconds <= 86400:
+      return 'D'
+    elif median_seconds <= 604800:
+      return 'W'
+    else:
+      return 'D'
   except:
     pass
   return 'D'
@@ -181,7 +196,7 @@ def real_data_loading (data_path, seq_len):
   df = pd.read_csv(data_path)
 
   # Detect date column
-  date_col, date_format, date_freq = detect_date_column(df)
+  date_col, date_example, date_freq = detect_date_column(df)
   has_date = date_col is not None
 
   # Keep only numeric columns as features
@@ -221,7 +236,7 @@ def real_data_loading (data_path, seq_len):
   info_dict = {
     'has_date': has_date,
     'date_column': date_col,
-    'date_format': date_format,
+    'date_example': date_example,
     'date_freq': date_freq,
     'feature_columns': numeric_df.columns.tolist(),
     'original_columns': original_columns,

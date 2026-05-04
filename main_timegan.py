@@ -44,14 +44,62 @@ from metrics.predictive_metrics import predictive_score_metrics
 from metrics.visualization_metrics import visualization
 
 
-def generate_dates(seq_len, date_format, freq='D'):
+def format_like_example(dates, example):
+  """Format pandas datetimes to match the example string pattern.
+
+  Handles leading-zero differences like 2014/1/1 vs 2014/01/01.
+
+  Args:
+    - dates: pandas DatetimeIndex
+    - example: original date string example
+
+  Returns:
+    - formatted: list of date strings
+  """
+  example = str(example).strip()
+  has_slash = '/' in example
+  has_dash = '-' in example
+  has_time = ':' in example
+
+  # Parse example to check for leading zeros
+  temp = example.replace('/', ' ').replace('-', ' ').replace(':', ' ').split()
+
+  no_leading_zero = {}
+  if len(temp) >= 3:
+    no_leading_zero['month'] = len(temp[1]) == 1 or (len(temp[1]) > 1 and temp[1][0] != '0')
+    no_leading_zero['day'] = len(temp[2]) == 1 or (len(temp[2]) > 1 and temp[2][0] != '0')
+  if has_time and len(temp) >= 4:
+    no_leading_zero['hour'] = len(temp[3]) == 1 or (len(temp[3]) > 1 and temp[3][0] != '0')
+
+  result = []
+  for d in dates:
+    if has_slash and has_time:
+      month = str(d.month) if no_leading_zero.get('month', False) else f"{d.month:02d}"
+      day = str(d.day) if no_leading_zero.get('day', False) else f"{d.day:02d}"
+      hour = str(d.hour) if no_leading_zero.get('hour', False) else f"{d.hour:02d}"
+      s = f"{d.year}/{month}/{day} {hour}:{d.minute:02d}:{d.second:02d}"
+    elif has_slash:
+      month = str(d.month) if no_leading_zero.get('month', False) else f"{d.month:02d}"
+      day = str(d.day) if no_leading_zero.get('day', False) else f"{d.day:02d}"
+      s = f"{d.year}/{month}/{day}"
+    elif has_dash and has_time:
+      s = f"{d.year}-{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}:{d.second:02d}"
+    elif has_dash:
+      s = f"{d.year}-{d.month:02d}-{d.day:02d}"
+    else:
+      s = str(d)
+    result.append(s)
+  return result
+
+
+def generate_dates(seq_len, example, freq='D'):
   """Generate a sequence of dates for a synthetic sample.
 
   Random start year between 2000-2012.
 
   Args:
     - seq_len: length of the date sequence
-    - date_format: output date format string
+    - example: original date string example for formatting
     - freq: pandas frequency string (default 'D' for daily)
 
   Returns:
@@ -62,7 +110,7 @@ def generate_dates(seq_len, date_format, freq='D'):
   day = np.random.randint(1, 29)
   start_date = pd.Timestamp(year=year, month=month, day=day)
   dates = pd.date_range(start=start_date, periods=seq_len, freq=freq)
-  return dates.strftime(date_format).tolist()
+  return format_like_example(dates, example)
 
 
 def main (args):
@@ -150,9 +198,9 @@ def main (args):
       # Add date column if original had one
       if info_dict.get('has_date', False):
         date_col = info_dict['date_column']
-        date_format = info_dict['date_format']
+        date_example = info_dict['date_example']
         date_freq = info_dict['date_freq']
-        sample_df[date_col] = generate_dates(len(sample), date_format, date_freq)
+        sample_df[date_col] = generate_dates(len(sample), date_example, date_freq)
         # Reorder columns to match original CSV
         sample_df = sample_df[original_columns]
       all_rows.append(sample_df)
